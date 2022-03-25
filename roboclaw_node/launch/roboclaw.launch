@@ -16,7 +16,7 @@
     <arg name="max_accel_front" default="1.5"/> <!--accel est en ms^2-->
     <arg name="max_accel_back" default="1.5"/>
 
-    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_node.py" name="roboclaw_node_front" output="screen" respawn="true">
+    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_motors.py" name="roboclaw_motors_front" output="screen" respawn="true">
         <param name="~dev" value="/dev/rcFront"/>
         <param name="~baud" value="$(arg baud)"/>
         <param name="~address" value="128"/>
@@ -31,7 +31,7 @@
         <param name="~name" value="roboclaw_front"/>
     </node>
     
-    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_node.py" name="roboclaw_node_back" output="screen" respawn="true">
+    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_motors.py" name="roboclaw_motors_back" output="screen" respawn="true">
         <param name="~dev" value="/dev/rcBack"/>
         <param name="~baud" value="$(arg baud)"/>
         <param name="~address" value="129"/>
@@ -45,6 +45,14 @@
         <param name="~max_accel" value="$(arg max_accel_back)"/>
         <param name="~name" value="roboclaw_back"/>
 
+    </node>
+
+    <node if="$(arg run_diag)" pkg="roboclaw_node" type="roboclaw_plow.py" name="roboclaw_plow" output="screen" respawn="true">
+        <param name="~dev" value="/dev/rcPlow"/>
+        <param name="~baud" value="$(arg baud)"/>
+        <param name="~address" value="130"/>
+        <param name="~max_duty" value="127"/>
+        <param name="~name" value="roboclaw_plow"/>
     </node>
 
     <node pkg="diagnostic_aggregator" type="aggregator_node"
