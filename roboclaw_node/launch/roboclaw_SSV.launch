@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!--<arg name="dev" default="/dev/ttyACM4"/>-->
+    <arg name="baud" default="460800"/>
+    <!--<arg name="address" default="128"/>-->
+    <arg name="max_speed" default="2.0"/>
+    <arg name="ticks_per_rotation" default="2000"/>      <!-- 66390.8 -->
+    <arg name="gear_ratio" default="32"/>
+    <arg name="wheel_circ" default="0.964"/>
+    <arg name="base_width" default="0.69"/>
+    <arg name="run_plow" default="true"/>
+    <arg name="pub_odom" default="false"/>
+    <arg name="pub_currents" default="false"/>
+    <arg name="stop_movement" default="true"/>
+    <arg name="max_accel" default="1.5"/> <!--accel est en ms^2-->
+
+    <node pkg="roboclaw_node" type="roboclaw_SSV_no_diag_and_monitoring.py" name="roboclaw_motors" output="screen" respawn="true">
+        <param name="~dev_front" value="/dev/rcFront"/>
+        <param name="~dev_rear" value="/dev/rcBack"/>
+        <param name="~baud" value="$(arg baud)"/>
+        <param name="~address_front" value="128"/>
+        <param name="~address_rear" value="129"/>
+        <param name="~max_speed" value="$(arg max_speed)"/>
+        <param name="~ticks_per_rotation" value="$(arg ticks_per_rotation)"/>
+        <param name="~gear_ratio" value="$(arg gear_ratio)"/>
+        <param name="~wheel_circ" value="$(arg wheel_circ)"/>
+        <param name="~base_width" value="$(arg base_width)"/>
+        <param name="~pub_odom" value="$(arg pub_odom)"/>
+        <param name="~pub_currents" value="$(arg pub_currents)"/>
+        <param name="~stop_movement" value="$(arg stop_movement)"/>
+        <param name="~max_accel" value="$(arg max_accel)"/>
+        <param name="~name" value="roboclaw_front"/>
+    </node>
+
+    <node if="$(arg run_plow)" pkg="roboclaw_node" type="roboclaw_plow.py" name="roboclaw_plow" output="screen" respawn="true">
+        <param name="~dev" value="/dev/rcPlow"/>
+        <param name="~baud" value="$(arg baud)"/>
+        <param name="~address" value="130"/>
+        <param name="~max_duty" value="127"/>
+        <param name="~name" value="roboclaw_plow"/>
+    </node>
+
+</launch>
