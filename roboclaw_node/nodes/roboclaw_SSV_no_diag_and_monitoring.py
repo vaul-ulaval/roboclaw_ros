@@ -72,7 +72,6 @@ class EncoderOdom:
         self.vel_theta = vel_theta
         return vel_x, vel_theta
 
-
     def update_publish(self, enc_front_left, enc_front_right, enc_rear_left, enc_rear_right):
         encoders = {
             "front left": enc_front_left,
@@ -82,14 +81,13 @@ class EncoderOdom:
         }
 
         for encoder_name, reading in encoders.items():
-            last_reading = getattr(self, "last_enc_{0}".format(encoder_name.replace(' ', '_')))
+            last_reading = getattr(self, f"last_enc_{encoder_name.replace(' ', '_')}")
 
             if abs(reading - last_reading) > self.ENCODER_JUMP_THRESHOLD:
-                rospy.logerr("Ignoring {0} encoder jump: cur {1}, last {2}".format(encoder_name, reading, last_reading))
+                rospy.logerr(f"Ignoring {encoder_name} encoder jump: cur {reading}, last {last_reading}")
                 return
 
-            setattr(self, "last_enc_{0}".format(encoder_name.replace(' ', '_')), reading)
-
+            setattr(self, f"last_enc_{encoder_name.replace(' ', '_')}", reading)
 
         vel_x, vel_theta = self.update(enc_front_left, enc_front_right, enc_rear_left, enc_rear_right)
         self.publish_odom(self.cur_x, self.cur_y, self.cur_theta, vel_x, vel_theta)
@@ -206,7 +204,7 @@ class Node:
     def get_address(self, param_name, default_value):
         address = int(rospy.get_param(param_name, default_value))
         if address > self.MAX_ADDRESS or address < self.MIN_ADDRESS:
-            rospy.logfatal("Address %d out of range. Must be in range %d - %d" % (address, self.MIN_ADDRESS, self.MAX_ADDRESS))
+            rospy.logfatal(f"Address {address} out of range. Must be in range {self.MIN_ADDRESS} - {self.MAX_ADDRESS}")
             rospy.signal_shutdown("Address out of range")
             return None
         return address
@@ -218,7 +216,7 @@ class Node:
         try:
             roboclaw.Open(dev_name, baud_rate)
         except Exception as e:
-            rospy.logfatal("Could not connect to Roboclaw at %d with address %d" % (dev_name, address))
+            rospy.logfatal(f"Could not connect to Roboclaw at {dev_name} with address {address}")
             rospy.logdebug(e)
             rospy.signal_shutdown("Could not connect to Roboclaw")
             return
@@ -226,7 +224,7 @@ class Node:
         version = self.get_version_and_log(address)
         if version is not None:
             if not version[0]:
-                rospy.logwarn("Could not get version from Roboclaw at address: %d" % address)
+                rospy.logwarn(f"Could not get version from Roboclaw at address: {address}")
             else:
                 rospy.logdebug(repr(version[1]))
 
@@ -236,10 +234,9 @@ class Node:
         try:
             version = roboclaw.ReadVersion(address)
         except Exception as e:
-            rospy.logwarn("Problem getting Roboclaw version from address: %d" % address)
+            rospy.logwarn(f"Problem getting Roboclaw version from address: {address}")
             rospy.logdebug(e)
         return version
-        
     
     def read_and_reset_all_devices(self):
         addresses = [self.address_front, self.address_rear]
@@ -293,7 +290,7 @@ class Node:
         try:
             return type(rospy.get_param(name, default))
         except ValueError:
-            rospy.logwarn("Invalid type for parameter %d. Using default value." % name)
+            rospy.logwarn(f"Invalid type for parameter {name}. Using default value.")
             return default
 
     def run(self):
