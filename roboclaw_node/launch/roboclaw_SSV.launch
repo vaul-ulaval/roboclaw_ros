@@ -30,7 +30,7 @@
         <param name="~pub_currents" value="$(arg pub_currents)"/>
         <param name="~stop_movement" value="$(arg stop_movement)"/>
         <param name="~max_accel" value="$(arg max_accel)"/>
-        <param name="~name" value="roboclaw_front"/>
+        <param name="~name" value="roboclaw_motor"/>
     </node>
 
     <node if="$(arg run_plow)" pkg="roboclaw_node" type="roboclaw_plow.py" name="roboclaw_plow" output="screen" respawn="true">
