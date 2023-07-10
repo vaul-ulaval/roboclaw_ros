@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from math import pi, cos, sin
 
-import roboclaw_driver.roboclaw_driver as roboclaw
+from roboclaw_driver.roboclaw_driver import RoboclawDriver
 import rospy
 import tf
 from geometry_msgs.msg import Quaternion, Twist
@@ -74,20 +74,20 @@ class EncoderOdom:
 
     def update_publish(self, enc_front_left, enc_front_right, enc_rear_left, enc_rear_right):
         encoders = {
-            "front left": enc_front_left,
-            "front right": enc_front_right,
-            "rear left": enc_rear_left,
-            "rear right": enc_rear_right
+            "front_left": enc_front_left,
+            "front_right": enc_front_right,
+            "rear_left": enc_rear_left,
+            "rear_right": enc_rear_right
         }
 
         for encoder_name, reading in encoders.items():
-            last_reading = getattr(self, f"last_enc_{encoder_name.replace(' ', '_')}")
+            last_reading = getattr(self, "last_enc_" + encoder_name)
 
             if abs(reading - last_reading) > self.ENCODER_JUMP_THRESHOLD:
-                rospy.logerr(f"Ignoring {encoder_name} encoder jump: cur {reading}, last {last_reading}")
+                rospy.logerr("Ignoring " + encoder_name + " encoder jump: cur " + reading + ", last " + last_reading)
                 return
 
-            setattr(self, f"last_enc_{encoder_name.replace(' ', '_')}", reading)
+            setattr(self, "last_enc_" + encoder_name, reading)
 
         vel_x, vel_theta = self.update(enc_front_left, enc_front_right, enc_rear_left, enc_rear_right)
         self.publish_odom(self.cur_x, self.cur_y, self.cur_theta, vel_x, vel_theta)
@@ -188,60 +188,56 @@ class Node:
 
     def __init__(self):
         rospy.init_node("roboclaw_motors")
-        rospy.on_shutdown(self.shutdown)
-        self.dev_name_front = rospy.get_param("~dev_front", "/dev/ttyACM0")
-        self.baud_rate = int(rospy.get_param("~baud", "115200"))
-        self.address_front = self.get_address("~address_front", "128")
-        self.dev_name_rear = rospy.get_param("~dev_rear", "/dev/ttyACM1")
-        self.address_rear = self.get_address("~address_rear", "129")
-        self.roboclaw_front = self.setup_devices(self.dev_name_front, self.baud_rate, self.address_front)
-        self.roboclaw_rear = self.setup_devices(self.dev_name_rear, self.baud_rate, self.address_rear)
+        self.dev_names = [rospy.get_param("~dev_front", "/dev/rcFront"), rospy.get_param("~dev_rear", "/dev/rcBack")]
+        self.addresses = [self.get_address("~address_front", "128"),self.get_address("~address_rear", "129")]
+        self.baud_rate = int(rospy.get_param("~baud", "460800"))
+        self.drivers = self.setup_devices(self.dev_names, self.addresses, self.baud_rate)
         self.read_and_reset_all_devices()
         self.parameters_setup()
         self.publishers_and_subscribers_setup()
         self.pid_and_motor_currents_setup()
+        rospy.on_shutdown(self.shutdown)
     
     def get_address(self, param_name, default_value):
         address = int(rospy.get_param(param_name, default_value))
         if address > self.MAX_ADDRESS or address < self.MIN_ADDRESS:
-            rospy.logfatal(f"Address {address} out of range. Must be in range {self.MIN_ADDRESS} - {self.MAX_ADDRESS}")
+            rospy.logfatal("Address " + address + " out of range. Must be in range " + self.MIN_ADDRESS + " - " + self.MAX_ADDRESS)
             rospy.signal_shutdown("Address out of range")
             return None
         return address
 
-    def setup_devices(self, dev_name, baud_rate, address):
-        if address is None:
-            return
+    def setup_devices(self, dev_names, addresses, baud_rate):
 
-        try:
-            roboclaw.Open(dev_name, baud_rate)
-        except Exception as e:
-            rospy.logfatal(f"Could not connect to Roboclaw at {dev_name} with address {address}")
-            rospy.logdebug(e)
-            rospy.signal_shutdown("Could not connect to Roboclaw")
-            return
+        for dev_name, address in zip(dev_names, addresses):
+            try:
+                driver = RoboclawDriver(dev_name, baud_rate, address)
+            except Exception as e:
+                rospy.logfatal("Could not connect to Roboclaw at " + dev_name + " with address " + str(address))
+                rospy.logdebug(e)
+                rospy.signal_shutdown("Could not connect to Roboclaw")
+                return
 
-        version = self.get_version_and_log(address)
-        if version is not None:
-            if not version[0]:
-                rospy.logwarn(f"Could not get version from Roboclaw at address: {address}")
-            else:
-                rospy.logdebug(repr(version[1]))
+            version = self.get_version_and_log(driver, address)
+            if version is not None:
+                if not version[0]:
+                    rospy.logwarn("Could not get version from Roboclaw at address: " + str(address))
+                else:
+                    rospy.logdebug(repr(version[1]))
+            
+            return driver
 
 
-    def get_version_and_log(self, address):
+    def get_version_and_log(self, driver):
         version = None
         try:
-            version = roboclaw.ReadVersion(address)
+            version = driver.ReadVersion()
         except Exception as e:
-            rospy.logwarn(f"Problem getting Roboclaw version from address: {address}")
+            rospy.logwarn("Problem getting Roboclaw version from address: " + str(driver.address))
             rospy.logdebug(e)
         return version
     
     def read_and_reset_all_devices(self):
-        addresses = [self.address_front, self.address_rear]
-
-        for address in addresses:
+        for address in self.addresses:
             if address is not None:
                 roboclaw.SpeedM1M2(address, 0, 0)
                 roboclaw.ResetEncoders(address)
@@ -265,7 +261,6 @@ class Node:
         self.encodm = None
         if (self.PUB_ODOM):
             self.encodm = EncoderOdom(self.TICKS_PER_METER, self.BASE_WIDTH)
-        self.addresses = [self.address_front, self.address_rear]
         self.movement = Movement(self.addresses, self.MAX_SPEED, self.BASE_WIDTH, self.TICKS_PER_METER, self.MAX_ACCEL)
         self.last_set_speed_time = rospy.get_rostime()
 
@@ -290,7 +285,7 @@ class Node:
         try:
             return type(rospy.get_param(name, default))
         except ValueError:
-            rospy.logwarn(f"Invalid type for parameter {name}. Using default value.")
+            rospy.logwarn("Invalid type for parameter " + name + ". Using default value.")
             return default
 
     def run(self):
