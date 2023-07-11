@@ -196,36 +196,17 @@ class Node:
         self.parameters_setup()
         self.publishers_and_subscribers_setup()
         self.pid_and_motor_currents_setup()
-        rospy.on_shutdown(self.shutdown)
+        rospy.on_shutdown(self.shutdown)        
+
+
     
     def get_address(self, param_name, default_value):
         address = int(rospy.get_param(param_name, default_value))
         if address > self.MAX_ADDRESS or address < self.MIN_ADDRESS:
-            rospy.logfatal("Address " + address + " out of range. Must be in range " + self.MIN_ADDRESS + " - " + self.MAX_ADDRESS)
+            rospy.logfatal("Address " + str(address) + " out of range. Must be in range " + str(self.MIN_ADDRESS) + " - " + str(self.MAX_ADDRESS))
             rospy.signal_shutdown("Address out of range")
             return None
         return address
-
-    def setup_devices(self, dev_names, addresses, baud_rate):
-
-        for dev_name, address in zip(dev_names, addresses):
-            try:
-                driver = RoboclawDriver(dev_name, baud_rate, address)
-            except Exception as e:
-                rospy.logfatal("Could not connect to Roboclaw at " + dev_name + " with address " + str(address))
-                rospy.logdebug(e)
-                rospy.signal_shutdown("Could not connect to Roboclaw")
-                return
-
-            version = self.get_version_and_log(driver, address)
-            if version is not None:
-                if not version[0]:
-                    rospy.logwarn("Could not get version from Roboclaw at address: " + str(address))
-                else:
-                    rospy.logdebug(repr(version[1]))
-            
-            return driver
-
 
     def get_version_and_log(self, driver):
         version = None
@@ -236,12 +217,34 @@ class Node:
             rospy.logdebug(e)
         return version
     
-    def read_and_reset_all_devices(self):
-        for address in self.addresses:
-            if address is not None:
-                roboclaw.SpeedM1M2(address, 0, 0)
-                roboclaw.ResetEncoders(address)
+    def setup_devices(self, dev_names, addresses, baud_rate):
+        drivers = []
+        for dev_name, address in zip(dev_names, addresses):
+            try:
+                driver = RoboclawDriver(dev_name, baud_rate, address)
+                drivers.append(driver)
+            except Exception as e:
+                rospy.logfatal(f"Could not connect to Roboclaw at {dev_name} with address {str(address)}")
+                rospy.logdebug(e)
+                rospy.signal_shutdown("Could not connect to Roboclaw")
+                return
 
+            version = self.get_version_and_log(driver)
+            if version is not None:
+                if not version[0]:
+                    rospy.logwarn(f"Could not get version from Roboclaw at address: {str(address)}")
+                else:
+                    rospy.logdebug(repr(version[1]))
+
+        return drivers
+
+    def read_and_reset_all_devices(self):
+        if self.drivers is not None:
+            for driver, address in zip(self.drivers, self.addresses):
+                driver.SpeedM1M2(address, 0, 0)
+                driver.ResetEncoders(address)
+                
+                
     def parameters_setup(self):
         self.MAX_SPEED = self.get_param("~max_speed", 2.0, float)
         self.TICKS_PER_ROTATION = self.get_param("~ticks_per_rotation", 2000, float)
@@ -261,7 +264,7 @@ class Node:
         self.encodm = None
         if (self.PUB_ODOM):
             self.encodm = EncoderOdom(self.TICKS_PER_METER, self.BASE_WIDTH)
-        self.movement = Movement(self.addresses, self.MAX_SPEED, self.BASE_WIDTH, self.TICKS_PER_METER, self.MAX_ACCEL)
+        self.movement = Movement(self.drivers, self.addresses, self.MAX_SPEED, self.BASE_WIDTH, self.TICKS_PER_METER, self.MAX_ACCEL)
         self.last_set_speed_time = rospy.get_rostime()
 
         rospy.Subscriber("cmd_vel", Twist, self.cmd_vel_callback, queue_size=1)
@@ -269,17 +272,20 @@ class Node:
 
     def pid_and_motor_currents_setup(self):
         # PID settings
-        # roboclaw.SetM1VelocityPID(self.address, self.P, self.I, self.D, 150000)
-        # roboclaw.SetM2VelocityPID(self.address, self.P, self.I, self.D, 150000)
+        # self.rc_front.SetM1VelocityPID(self.P, self.I, self.D, 150000)
+        # self.rc_front.SetM2VelocityPID(self.P, self.I, self.D, 150000)
+        # self.rc_rear.SetM1VelocityPID(self.P, self.I, self.D, 150000)
+        # self.rc_rear.SetM2VelocityPID(self.P, self.I, self.D, 150000)
 
         # Set max motor currents
-        addresses = [self.address_front, self.address_rear]
-        for address in addresses:
-            if address is not None:
-                roboclaw.SetM1MaxCurrent(address, 5000)
-                roboclaw.SetM2MaxCurrent(address, 5000)
-                roboclaw.SetMainVoltages(address, 150, 280)
+        if self.drivers is not None:
+            for driver, address in zip(self.drivers, self.addresses):
+                driver.SetM1MaxCurrent(address, 5000)
+                driver.SetM2MaxCurrent(address, 5000)
+                driver.SetMainVoltages(address, 150, 280)
                 rospy.sleep(1)
+        else:
+            raise ValueError("Motor controller addresses are not set.")
 
     def get_param(self, name, default, type):
         try:
@@ -292,67 +298,72 @@ class Node:
         rospy.loginfo("Starting motor drive")
         r_time = rospy.Rate(30)
         while not rospy.is_shutdown():
-            for address in self.addresses:
-            # stop movement if robot doesn't recieve commands for 1 sec
-                if (self.STOP_MOVEMENT and not self.movement.stopped and rospy.get_rostime().to_sec() - self.movement.last_set_speed_time.to_sec() > 1):
-                    rospy.loginfo("Did not get command for 1 second, stopping")
-                    try:
-                        roboclaw.ForwardM1(address, 0)
-                        roboclaw.ForwardM2(address, 0)
-                    except OSError as e:
-                        rospy.logerr("Could not stop")
-                        rospy.logdebug(e)
-                self.movement.stopped = True
+            if self.drivers is not None:
+                for driver, address in zip(self.drivers, self.addresses):
+                    # stop movement if robot doesn't recieve commands for 1 sec
+                    if (self.STOP_MOVEMENT and not self.movement.stopped and rospy.get_rostime().to_sec() - self.movement.last_set_speed_time.to_sec() > 1):
+                        rospy.loginfo("Did not get command for 1 second, stopping")
+                        try:
+                            driver.ForwardM1(address, 0)
+                            driver.ForwardM2(address, 0)
+                        except OSError as e:
+                            rospy.logerr("Could not stop")
+                            rospy.logdebug(e)
+                    self.movement.stopped = True
 
             # TODO need find solution to the OSError11 looks like sync problem with serial
-            status_front_rigth, enc_front_rigth, _ = None, None, None
+            status_front_right, enc_front_right, _ = None, None, None
             status_front_left, enc_front_left, _ = None, None, None
-            status_rear_rigth, enc_rear_rigth, _ = None, None, None
+            status_rear_right, enc_rear_right, _ = None, None, None
             status_rear_left, enc_rear_left, _ = None, None, None
 
-            try:
-                status_front_rigth, enc_front_rigth, _ = roboclaw.ReadEncM1(self.addresses[0])
-            except ValueError:
-                pass
-            except OSError as e:
-                rospy.logwarn("ReadEncM1 front OSError: %d", e.errno)
-                rospy.logdebug(e)
+            
+            if self.drivers is not None:
+                try:
+                    status_front_right, enc_front_right, _ = self.drivers[0].ReadEncM1(self.addresses[0])
+                except ValueError:
+                    pass
+                except OSError as e:
+                    rospy.logwarn("ReadEncM1 front OSError: %d", e.errno)
+                    rospy.logdebug(e)
 
-            try:
-                status_front_left, enc_front_left, _ = roboclaw.ReadEncM2(self.addresses[0])
-            except ValueError:
-                pass
-            except OSError as e:
-                rospy.logwarn("ReadEncM2 front OSError: %d", e.errno)
-                rospy.logdebug(e)
+                try:
+                    status_front_left, enc_front_left, _ = self.drivers[0].ReadEncM2(self.addresses[0])
+                except ValueError:
+                    pass
+                except OSError as e:
+                    rospy.logwarn("ReadEncM2 front OSError: %d", e.errno)
+                    rospy.logdebug(e)
 
-            try:
-                status_rear_rigth, enc_rear_rigth, _ = roboclaw.ReadEncM1(self.addresses[1])
-            except ValueError:
-                pass
-            except OSError as e:
-                rospy.logwarn("ReadEncM1 rear OSError: %d", e.errno)
-                rospy.logdebug(e)
+                try:
+                    status_rear_right, enc_rear_right, _ = self.drivers[1].ReadEncM1(self.addresses[1])
+                except ValueError:
+                    pass
+                except OSError as e:
+                    rospy.logwarn("ReadEncM1 rear OSError: %d", e.errno)
+                    rospy.logdebug(e)
 
-            try:
-                status_rear_left, enc_rear_left, _ = roboclaw.ReadEncM2(self.addresses[1])
-            except ValueError:
-                pass
-            except OSError as e:
-                rospy.logwarn("ReadEncM2 rear OSError: %d", e.errno)
-                rospy.logdebug(e)
+                try:
+                    status_rear_left, enc_rear_left, _ = self.drivers[1].ReadEncM2(self.addresses[1])
+                except ValueError:
+                    pass
+                except OSError as e:
+                    rospy.logwarn("ReadEncM2 rear OSError: %d", e.errno)
+                    rospy.logdebug(e)
 
-            if (status_front_rigth is not None and status_front_left is not None and status_rear_rigth is not None and status_rear_left is not None):
-                rospy.logdebug("Encoders %d %d %d %d" % (enc_front_left, enc_front_rigth, enc_rear_left, enc_rear_rigth))
-                if (self.encodm):
-                    self.encodm.update_publish(enc_front_left, enc_front_rigth, enc_rear_left, enc_rear_rigth)
+                if (status_front_right is not None and status_front_left is not None and status_rear_right is not None and status_rear_left is not None):
+                    rospy.logdebug("Encoders %d %d %d %d" % (enc_front_left, enc_front_right, enc_rear_left, enc_rear_right))
+                    if (self.encodm):
+                        self.encodm.update_publish(enc_front_left, enc_front_right, enc_rear_left, enc_rear_right)
+
             self.movement.run()
+
 
             # Publish motor currents
             if (self.PUB_CURRENTS):
-                for address in self.addresses:
-                    if address is not None:
-                        _, cur1, cur2 = roboclaw.ReadCurrents(address)
+                if self.drivers is not None and self.addresses is not None:
+                    for driver, address in zip(self.drivers, self.addresses):
+                        _, cur1, cur2 = driver.ReadCurrents(address)
                         rospy.loginfo("currents : %d %d" % (cur1, cur2))
                         currents = Float32MultiArray(data=[cur1/100.0, cur2/100.0])
                         self.current_pub.publish(currents)
