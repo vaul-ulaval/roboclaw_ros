@@ -128,8 +128,9 @@ class EncoderOdom:
         self.odom_pub.publish(odom)
 
 class Movement:
-    def __init__(self, addresses, max_speed, base_width, ticks_per_meter, max_accel):
+    def __init__(self, drivers, addresses, max_speed, base_width, ticks_per_meter, max_accel):
         self.twist = None
+        self.drivers = drivers
         self.addresses = addresses
         self.MAX_SPEED = max_speed
         self.BASE_WIDTH = base_width
@@ -165,21 +166,22 @@ class Movement:
 
         rospy.logdebug("vr_ticks:%d vl_ticks: %d", vr_ticks, vl_ticks)
 
-        for address in self.addresses:
+        if self.drivers is not None:
             try:
-                if vr_ticks is 0 and vl_ticks is 0:
-                    roboclaw.ForwardM1(address, 0)
-                    roboclaw.ForwardM2(address, 0)
-                    self.vr_ticks = 0
-                    self.vl_ticks = 0
-                else:
-                    self.vr_ticks = vr_ticks
-                    self.vl_ticks = vl_ticks
-                    roboclaw.SpeedM1M2(address, int(self.vr_ticks), int(self.vl_ticks))
+                for driver, address in zip(self.drivers, self.addresses):
+                    if vr_ticks is 0 and vl_ticks is 0:
+                        driver.ForwardM1(address, 0)
+                        driver.ForwardM2(address, 0)
+                        self.vr_ticks = 0
+                        self.vl_ticks = 0
+                    else:
+                        self.vr_ticks = vr_ticks
+                        self.vl_ticks = vl_ticks
+                        driver.SpeedM1M2(address, int(self.vr_ticks), int(self.vl_ticks))
             except OSError as e:
                 rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
                 rospy.logdebug(e)
-        
+
 
 class Node:
 
@@ -358,7 +360,6 @@ class Node:
 
             self.movement.run()
 
-
             # Publish motor currents
             if (self.PUB_CURRENTS):
                 if self.drivers is not None and self.addresses is not None:
@@ -376,18 +377,20 @@ class Node:
     # TODO: need clean shutdown so motors stop even if new msgs are arriving
     def shutdown(self):
         rospy.loginfo("Shutting down")
-        for address in self.addresses:
-            try:
-                roboclaw.ForwardM1(address, 0)
-                roboclaw.ForwardM2(address, 0)
-            except OSError:
-                rospy.logerr("Shutdown did not work trying again")
+        if self.drivers is not None:
+            for driver, address in zip(self.drivers, self.addresses):
                 try:
-                    roboclaw.ForwardM1(address, 0)
-                    roboclaw.ForwardM2(address, 0)
+                    driver.ForwardM1(address, 0)
+                    driver.ForwardM2(address, 0)
                 except OSError as e:
-                    rospy.logerr("Could not shutdown motors!!!!")
+                    rospy.logerr("Shutdown did not work trying again")
                     rospy.logdebug(e)
+                    try:
+                        driver.ForwardM1(address, 0)
+                        driver.ForwardM2(address, 0)
+                    except OSError as e:
+                        rospy.logerr("Could not shutdown motors!!!!")
+                        rospy.logdebug(e)
 
 if __name__ == "__main__":
     try:
