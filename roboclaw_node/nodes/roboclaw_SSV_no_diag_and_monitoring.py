@@ -138,10 +138,9 @@ class EncoderOdom:
 
 class Movement:
     def __init__(
-        self, drivers, addresses, max_speed, base_width, ticks_per_meter, max_accel):
+        self, drivers, max_speed, base_width, ticks_per_meter, max_accel):
         self.twist = None
         self.drivers = drivers
-        self.addresses = addresses
         self.MAX_SPEED = max_speed
         self.BASE_WIDTH = base_width
         self.TICKS_PER_METER = ticks_per_meter
@@ -177,22 +176,20 @@ class Movement:
         rospy.logdebug("vr_ticks:%d vl_ticks: %d", vr_ticks, vl_ticks)
 
         if self.drivers is not None:
-            try:
-                for driver, address in zip(self.drivers, self.addresses):
+            for driver in self.drivers:
+                try:
                     if vr_ticks is 0 and vl_ticks is 0:
-                        driver.ForwardM1(address, 0)
-                        driver.ForwardM2(address, 0)
+                        driver.ForwardM1(0)
+                        driver.ForwardM2(0)
                         self.vr_ticks = 0
                         self.vl_ticks = 0
                     else:
                         self.vr_ticks = vr_ticks
                         self.vl_ticks = vl_ticks
-                        driver.SpeedM1M2(
-                            address, int(self.vr_ticks), int(self.vl_ticks)
-                        )
-            except OSError as e:
-                rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
-                rospy.logdebug(e)
+                        driver.SpeedM1M2(int(self.vr_ticks), int(self.vl_ticks))
+                except OSError as e:
+                    rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
+                    rospy.logdebug(e)
 
 
 class Node:
@@ -268,9 +265,9 @@ class Node:
 
     def read_and_reset_all_devices(self):
         if self.drivers is not None:
-            for driver, address in zip(self.drivers, self.addresses):
-                driver.SpeedM1M2(address, 0, 0)
-                driver.ResetEncoders(address)
+            for driver in self.drivers:
+                driver.SpeedM1M2(0, 0)
+                driver.ResetEncoders()
 
     def parameters_setup(self):
         self.MAX_SPEED = self.get_param("~max_speed", 2.0, float)
@@ -295,7 +292,6 @@ class Node:
             self.encodm = EncoderOdom(self.TICKS_PER_METER, self.BASE_WIDTH)
         self.movement = Movement(
             self.drivers,
-            self.addresses,
             self.MAX_SPEED,
             self.BASE_WIDTH,
             self.TICKS_PER_METER,
@@ -317,10 +313,10 @@ class Node:
 
         # Set max motor currents
         if self.drivers is not None:
-            for driver, address in zip(self.drivers, self.addresses):
-                driver.SetM1MaxCurrent(address, 5000)
-                driver.SetM2MaxCurrent(address, 5000)
-                driver.SetMainVoltages(address, 150, 280)
+            for driver in self.drivers:
+                driver.SetM1MaxCurrent(5000)
+                driver.SetM2MaxCurrent(5000)
+                driver.SetMainVoltages(150, 280)
                 rospy.sleep(1)
         else:
             raise ValueError("Motor controller addresses are not set.")
@@ -339,8 +335,8 @@ class Node:
         r_time = rospy.Rate(30)
         while not rospy.is_shutdown():
             if self.drivers is not None:
-                for driver, address in zip(self.drivers, self.addresses):
-                    # stop movement if robot doesn't recieve commands for 1 sec
+                for driver in self.drivers:
+                    # stop movement if robot doesn't receive commands for 1 sec
                     if (
                         self.STOP_MOVEMENT
                         and not self.movement.stopped
@@ -350,8 +346,8 @@ class Node:
                     ):
                         rospy.loginfo("Did not get command for 1 second, stopping")
                         try:
-                            driver.ForwardM1(address, 0)
-                            driver.ForwardM2(address, 0)
+                            driver.ForwardM1(0)
+                            driver.ForwardM2(0)
                         except OSError as e:
                             rospy.logerr("Could not stop")
                             rospy.logdebug(e)
@@ -365,9 +361,7 @@ class Node:
 
             if self.drivers is not None:
                 try:
-                    status_front_right, enc_front_right, _ = self.drivers[0].ReadEncM1(
-                        self.addresses[0]
-                    )
+                    status_front_right, enc_front_right, _ = self.drivers[0].ReadEncM1()
                 except ValueError:
                     pass
                 except OSError as e:
@@ -432,8 +426,8 @@ class Node:
             # Publish motor currents
             if self.PUB_CURRENTS:
                 if self.drivers is not None and self.addresses is not None:
-                    for driver, address in zip(self.drivers, self.addresses):
-                        _, cur1, cur2 = driver.ReadCurrents(address)
+                    for driver in self.drivers:
+                        _, cur1, cur2 = driver.ReadCurrents()
                         rospy.loginfo("currents : %d %d" % (cur1, cur2))
                         currents = Float32MultiArray(data=[cur1 / 100.0, cur2 / 100.0])
                         self.current_pub.publish(currents)
@@ -447,16 +441,16 @@ class Node:
     def shutdown(self):
         rospy.loginfo("Shutting down")
         if self.drivers is not None:
-            for driver, address in zip(self.drivers, self.addresses):
+            for driver in self.drivers:
                 try:
-                    driver.ForwardM1(address, 0)
-                    driver.ForwardM2(address, 0)
+                    driver.ForwardM1(0)
+                    driver.ForwardM2(0)
                 except OSError as e:
                     rospy.logerr("Shutdown did not work trying again")
                     rospy.logdebug(e)
                     try:
-                        driver.ForwardM1(address, 0)
-                        driver.ForwardM2(address, 0)
+                        driver.ForwardM1(0)
+                        driver.ForwardM2(0)
                     except OSError as e:
                         rospy.logerr("Could not shutdown motors!!!!")
                         rospy.logdebug(e)
