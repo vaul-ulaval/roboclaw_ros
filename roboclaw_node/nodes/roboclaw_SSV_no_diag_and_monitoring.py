@@ -178,15 +178,9 @@ class Movement:
         if self.drivers is not None:
             for driver in self.drivers:
                 try:
-                    if vr_ticks is 0 and vl_ticks is 0:
-                        driver.ForwardM1(0)
-                        driver.ForwardM2(0)
-                        self.vr_ticks = 0
-                        self.vl_ticks = 0
-                    else:
-                        self.vr_ticks = vr_ticks
-                        self.vl_ticks = vl_ticks
-                        driver.SpeedM1M2(int(self.vr_ticks), int(self.vl_ticks))
+                    self.vr_ticks = vr_ticks
+                    self.vl_ticks = vl_ticks
+                    driver.SpeedM1M2(int(self.vr_ticks), int(self.vl_ticks))
                 except OSError as e:
                     rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
                     rospy.logdebug(e)
