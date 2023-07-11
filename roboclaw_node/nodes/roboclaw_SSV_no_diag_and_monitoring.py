@@ -175,15 +175,14 @@ class Movement:
 
         rospy.logdebug("vr_ticks:%d vl_ticks: %d", vr_ticks, vl_ticks)
 
-        if self.drivers is not None:
-            for driver in self.drivers:
-                try:
-                    self.vr_ticks = vr_ticks
-                    self.vl_ticks = vl_ticks
-                    driver.SpeedM1M2(int(self.vr_ticks), int(self.vl_ticks))
-                except OSError as e:
-                    rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
-                    rospy.logdebug(e)
+        for driver in self.drivers:
+            try:
+                self.vr_ticks = vr_ticks
+                self.vl_ticks = vl_ticks
+                driver.SpeedM1M2(int(self.vr_ticks), int(self.vl_ticks))
+            except OSError as e:
+                rospy.logwarn("SpeedM1M2 OSError: %d", e.errno)
+                rospy.logdebug(e)
 
 
 class Node:
@@ -258,10 +257,9 @@ class Node:
         return drivers
 
     def read_and_reset_all_devices(self):
-        if self.drivers is not None:
-            for driver in self.drivers:
-                driver.SpeedM1M2(0, 0)
-                driver.ResetEncoders()
+        for driver in self.drivers:
+            driver.SpeedM1M2(0, 0)
+            driver.ResetEncoders()
 
     def parameters_setup(self):
         self.MAX_SPEED = self.get_param("~max_speed", 2.0, float)
@@ -306,14 +304,11 @@ class Node:
         # self.rc_rear.SetM2VelocityPID(self.P, self.I, self.D, 150000)
 
         # Set max motor currents
-        if self.drivers is not None:
-            for driver in self.drivers:
-                driver.SetM1MaxCurrent(5000)
-                driver.SetM2MaxCurrent(5000)
-                driver.SetMainVoltages(150, 280)
-                rospy.sleep(1)
-        else:
-            raise ValueError("Motor controller addresses are not set.")
+        for driver in self.drivers:
+            driver.SetM1MaxCurrent(5000)
+            driver.SetM2MaxCurrent(5000)
+            driver.SetMainVoltages(150, 280)
+            rospy.sleep(1)
 
     def get_param(self, name, default, type):
         try:
@@ -328,24 +323,23 @@ class Node:
         rospy.loginfo("Starting motor drive")
         r_time = rospy.Rate(30)
         while not rospy.is_shutdown():
-            if self.drivers is not None:
+            # stop movement if robot doesn't receive commands for 1 sec
+            if (
+                self.STOP_MOVEMENT
+                and not self.movement.stopped
+                and rospy.get_rostime().to_sec()
+                - self.movement.last_set_speed_time.to_sec()
+                > 1
+            ):
+                rospy.loginfo("Did not get command for 1 second, stopping")
                 for driver in self.drivers:
-                    # stop movement if robot doesn't receive commands for 1 sec
-                    if (
-                        self.STOP_MOVEMENT
-                        and not self.movement.stopped
-                        and rospy.get_rostime().to_sec()
-                        - self.movement.last_set_speed_time.to_sec()
-                        > 1
-                    ):
-                        rospy.loginfo("Did not get command for 1 second, stopping")
-                        try:
-                            driver.ForwardM1(0)
-                            driver.ForwardM2(0)
-                        except OSError as e:
-                            rospy.logerr("Could not stop")
-                            rospy.logdebug(e)
-                    self.movement.stopped = True
+                    try:
+                        driver.ForwardM1(0)
+                        driver.ForwardM2(0)
+                    except OSError as e:
+                        rospy.logerr("Could not stop")
+                        rospy.logdebug(e)
+            self.movement.stopped = True
 
             # TODO need find solution to the OSError11 looks like sync problem with serial
             status_front_right, enc_front_right, _ = None, None, None
@@ -353,78 +347,76 @@ class Node:
             status_rear_right, enc_rear_right, _ = None, None, None
             status_rear_left, enc_rear_left, _ = None, None, None
 
-            if self.drivers is not None:
-                try:
-                    status_front_right, enc_front_right, _ = self.drivers[0].ReadEncM1()
-                except ValueError:
-                    pass
-                except OSError as e:
-                    rospy.logwarn("ReadEncM1 front OSError: %d", e.errno)
-                    rospy.logdebug(e)
+            try:
+                status_front_right, enc_front_right, _ = self.drivers[0].ReadEncM1()
+            except ValueError:
+                pass
+            except OSError as e:
+                rospy.logwarn("ReadEncM1 front OSError: %d", e.errno)
+                rospy.logdebug(e)
 
-                try:
-                    status_front_left, enc_front_left, _ = self.drivers[0].ReadEncM2(
-                        self.addresses[0]
-                    )
-                except ValueError:
-                    pass
-                except OSError as e:
-                    rospy.logwarn("ReadEncM2 front OSError: %d", e.errno)
-                    rospy.logdebug(e)
+            try:
+                status_front_left, enc_front_left, _ = self.drivers[0].ReadEncM2(
+                    self.addresses[0]
+                )
+            except ValueError:
+                pass
+            except OSError as e:
+                rospy.logwarn("ReadEncM2 front OSError: %d", e.errno)
+                rospy.logdebug(e)
 
-                try:
-                    status_rear_right, enc_rear_right, _ = self.drivers[1].ReadEncM1(
-                        self.addresses[1]
-                    )
-                except ValueError:
-                    pass
-                except OSError as e:
-                    rospy.logwarn("ReadEncM1 rear OSError: %d", e.errno)
-                    rospy.logdebug(e)
+            try:
+                status_rear_right, enc_rear_right, _ = self.drivers[1].ReadEncM1(
+                    self.addresses[1]
+                )
+            except ValueError:
+                pass
+            except OSError as e:
+                rospy.logwarn("ReadEncM1 rear OSError: %d", e.errno)
+                rospy.logdebug(e)
 
-                try:
-                    status_rear_left, enc_rear_left, _ = self.drivers[1].ReadEncM2(
-                        self.addresses[1]
-                    )
-                except ValueError:
-                    pass
-                except OSError as e:
-                    rospy.logwarn("ReadEncM2 rear OSError: %d", e.errno)
-                    rospy.logdebug(e)
+            try:
+                status_rear_left, enc_rear_left, _ = self.drivers[1].ReadEncM2(
+                    self.addresses[1]
+                )
+            except ValueError:
+                pass
+            except OSError as e:
+                rospy.logwarn("ReadEncM2 rear OSError: %d", e.errno)
+                rospy.logdebug(e)
 
-                if (
-                    status_front_right is not None
-                    and status_front_left is not None
-                    and status_rear_right is not None
-                    and status_rear_left is not None
-                ):
-                    rospy.logdebug(
-                        "Encoders %d %d %d %d"
-                        % (
-                            enc_front_left,
-                            enc_front_right,
-                            enc_rear_left,
-                            enc_rear_right,
-                        )
+            if (
+                status_front_right is not None
+                and status_front_left is not None
+                and status_rear_right is not None
+                and status_rear_left is not None
+            ):
+                rospy.logdebug(
+                    "Encoders %d %d %d %d"
+                    % (
+                        enc_front_left,
+                        enc_front_right,
+                        enc_rear_left,
+                        enc_rear_right,
                     )
-                    if self.encodm:
-                        self.encodm.update_publish(
-                            enc_front_left,
-                            enc_front_right,
-                            enc_rear_left,
-                            enc_rear_right,
-                        )
+                )
+                if self.encodm:
+                    self.encodm.update_publish(
+                        enc_front_left,
+                        enc_front_right,
+                        enc_rear_left,
+                        enc_rear_right,
+                    )
 
             self.movement.run()
 
             # Publish motor currents
             if self.PUB_CURRENTS:
-                if self.drivers is not None and self.addresses is not None:
-                    for driver in self.drivers:
-                        _, cur1, cur2 = driver.ReadCurrents()
-                        rospy.loginfo("currents : %d %d" % (cur1, cur2))
-                        currents = Float32MultiArray(data=[cur1 / 100.0, cur2 / 100.0])
-                        self.current_pub.publish(currents)
+                for driver in self.drivers:
+                    _, cur1, cur2 = driver.ReadCurrents()
+                    rospy.loginfo("currents : %d %d" % (cur1, cur2))
+                    currents = Float32MultiArray(data=[cur1 / 100.0, cur2 / 100.0])
+                    self.current_pub.publish(currents)
         r_time.sleep()
 
     def cmd_vel_callback(self, twist):
@@ -434,20 +426,19 @@ class Node:
     # TODO: need clean shutdown so motors stop even if new msgs are arriving
     def shutdown(self):
         rospy.loginfo("Shutting down")
-        if self.drivers is not None:
-            for driver in self.drivers:
+        for driver in self.drivers:
+            try:
+                driver.ForwardM1(0)
+                driver.ForwardM2(0)
+            except OSError as e:
+                rospy.logerr("Shutdown did not work trying again")
+                rospy.logdebug(e)
                 try:
                     driver.ForwardM1(0)
                     driver.ForwardM2(0)
                 except OSError as e:
-                    rospy.logerr("Shutdown did not work trying again")
+                    rospy.logerr("Could not shutdown motors!!!!")
                     rospy.logdebug(e)
-                    try:
-                        driver.ForwardM1(0)
-                        driver.ForwardM2(0)
-                    except OSError as e:
-                        rospy.logerr("Could not shutdown motors!!!!")
-                        rospy.logdebug(e)
 
 
 if __name__ == "__main__":
