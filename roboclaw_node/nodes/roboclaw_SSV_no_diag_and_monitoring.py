@@ -334,8 +334,7 @@ class Node:
                 rospy.loginfo("Did not get command for 1 second, stopping")
                 for driver in self.drivers:
                     try:
-                        driver.ForwardM1(0)
-                        driver.ForwardM2(0)
+                        driver.StopMotors()
                     except OSError as e:
                         rospy.logerr("Could not stop")
                         rospy.logdebug(e)
@@ -428,14 +427,12 @@ class Node:
         rospy.loginfo("Shutting down")
         for driver in self.drivers:
             try:
-                driver.ForwardM1(0)
-                driver.ForwardM2(0)
+                driver.StopMotors()
             except OSError as e:
                 rospy.logerr("Shutdown did not work trying again")
                 rospy.logdebug(e)
                 try:
-                    driver.ForwardM1(0)
-                    driver.ForwardM2(0)
+                    driver.StopMotors()
                 except OSError as e:
                     rospy.logerr("Could not shutdown motors!!!!")
                     rospy.logdebug(e)
