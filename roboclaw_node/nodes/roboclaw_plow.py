@@ -41,9 +41,6 @@ class Movement:
         #if linear_y < -self.MAX_DUTY:
         #    linear_y = -self.MAX_DUTY
 
-
-        rospy.loginfo("Duty:%d ", linear_x)
-
         try:
             if linear_x >= 0:
                 roboclaw.BackwardM1(self.address, int(linear_x * self.MAX_DUTY))

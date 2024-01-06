@@ -153,9 +153,6 @@ class Movement:
         vr_ticks = int(vr * self.TICKS_PER_METER)  # ticks/s
         vl_ticks = int(vl * self.TICKS_PER_METER)
 
-        #print("-- vr_ticks:{} vl_ticks:{}".format(vr_ticks, vl_ticks))
-        rospy.logdebug("vr_ticks:%d vl_ticks: %d", vr_ticks, vl_ticks)
-
         try:
             # This is a hack way to keep a poorly tuned PID from making noise at speed 0
 
@@ -323,18 +320,16 @@ class Node:
                 rospy.logdebug(e)
 
             if ('enc1' in vars()) and ('enc2' in vars() and enc1 and enc2):
-                rospy.logdebug(" Encoders %d %d" % (enc1, enc2))
                 if (self.encodm):
                     self.encodm.update_publish(enc2, enc1) # update_publish(enc_left, enc_right)
                 self.updater.update()
             self.movement.run()
 
             _, cur1, cur2 = roboclaw.ReadCurrents(self.address)
-            rospy.loginfo("currents : %d %d" % (cur1, cur2))
             currents = Float32MultiArray(data=[cur1/100.0, cur2/100.0])
             self.current_pub.publish(currents)
 
-            rospy.loginfo(roboclaw.ReadError(self.address)[1])
+            #rospy.loginfo(roboclaw.ReadError(self.address)[1])
             r_time.sleep()
 
     def cmd_vel_callback(self, twist):
