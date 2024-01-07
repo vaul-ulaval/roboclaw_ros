@@ -169,11 +169,10 @@ class Movement:
                 self.vl_ticks = 0
             else:
                 gain = 0.05
-                #self.vr_ticks = gain * vr_ticks + (1 - gain) * self.vr_ticks
-                #self.vl_ticks = gain * vl_ticks + (1 - gain) * self.vl_ticks
                 self.vr_ticks = vr_ticks
                 self.vl_ticks = vl_ticks
-                # roboclaw.SpeedAccelM1M2(self.address, int(self.MAX_ACCEL * self.TICKS_PER_METER), int(self.vr_ticks), int(self.vl_ticks))
+                #roboclaw.SpeedM2(self.address, int(self.vr_ticks))
+                #roboclaw.SpeedM1(self.address, int(self.vr_ticks))
                 roboclaw.SpeedM1M2(self.address, int(self.vr_ticks), int(self.vl_ticks))
                 #print(int(self.MAX_ACCEL * self.TICKS_PER_METER))
         except OSError as e:
@@ -269,9 +268,9 @@ class Node:
         # roboclaw.SetM2VelocityPID(self.address, self.P, self.I, self.D, 150000)
 
         # Set max motor currents
-        roboclaw.SetM1MaxCurrent(self.address, 5000)
-        roboclaw.SetM2MaxCurrent(self.address, 5000)
-        roboclaw.SetMainVoltages(self.address, 150, 280)
+        # roboclaw.SetM1MaxCurrent(self.address, 5000)
+        # roboclaw.SetM2MaxCurrent(self.address, 5000)
+        # roboclaw.SetMainVoltages(self.address, 150, 280)
 
         rospy.sleep(1)
 
@@ -285,7 +284,7 @@ class Node:
 
     def run(self):
         rospy.loginfo("Starting motor drive")
-        r_time = rospy.Rate(30)
+        r_time = rospy.Rate(20)
         while not rospy.is_shutdown():
 
             # stop movement if robot doesn't recieve commands for 1 sec
@@ -325,11 +324,11 @@ class Node:
                 self.updater.update()
             self.movement.run()
 
-            _, cur1, cur2 = roboclaw.ReadCurrents(self.address)
-            currents = Float32MultiArray(data=[cur1/100.0, cur2/100.0])
-            self.current_pub.publish(currents)
+            # _, cur1, cur2 = roboclaw.ReadCurrents(self.address)
+            # currents = Float32MultiArray(data=[cur1/100.0, cur2/100.0])
+            # self.current_pub.publish(currents)
 
-            #rospy.loginfo(roboclaw.ReadError(self.address)[1])
+            #rospy.loginfo(roboclaw.ReadError(self.address))
             r_time.sleep()
 
     def cmd_vel_callback(self, twist):
