@@ -81,6 +81,7 @@ class Cmd:
 	GETPINFUNCTIONS = 75
 	SETDEADBAND = 76
 	GETDEADBAND = 77
+	GETM1M2ENC = 78
 	RESTOREDEFAULTS = 80
 	GETTEMP = 82
 	GETTEMP2 = 83
@@ -186,7 +187,11 @@ class RoboclawDriver():
 
 	def ReadEncM2(self):
 		return self._read4_1(Cmd.GETM2ENC)
+	
 
+	def ReadEncoders(self):
+		return self._read4_4(Cmd.GETM1M2ENC)
+	
 
 	def ReadSpeedM1(self):
 		return self._read4_1(Cmd.GETM1SPEED)
@@ -211,7 +216,7 @@ class RoboclawDriver():
 				data = self.port.read(1)
 				if len(data):
 					val = ord(data)
-					crc_update(val)
+					self.crc_update(val)
 					if val == 0:
 						break
 					str += data[0]
@@ -292,11 +297,11 @@ class RoboclawDriver():
 
 
 	def SpeedM1M2(self, m1, m2):
-		return self.self._writeS4S4(self, Cmd.MIXEDSPEED, m1, m2)
+		return self._writeS4S4(Cmd.MIXEDSPEED, m1, m2)
 
 
 	def SpeedAccelM1(self, accel, speed):
-		return self._write4S4(self, Cmd.M1SPEEDACCEL, accel, speed)
+		return self._write4S4(Cmd.M1SPEEDACCEL, accel, speed)
 
 
 	def SpeedAccelM2(self, accel, speed):
@@ -771,12 +776,32 @@ class RoboclawDriver():
 					crc = self._readchecksumword()
 					if crc[0]:
 						if self._crc & 0xFFFF != crc[1] & 0xFFFF:
-							return 0, 0
+							return 0, 0, 0
 						return 1, val1[1], val2[1]
 			trys -= 1
 			if trys == 0:
 				break
-		return 0, 0
+		return 0, 0, 0
+	
+
+	def _read4_4(self, cmd):
+		trys = _trystimeout
+		while 1:
+			self.port.flushInput()
+			self._sendcommand(cmd)
+			val1 = self._readslong()
+			if val1[0]:
+				val2 = self._readslong()
+				if val2[0]:
+					crc = self._readchecksumword()
+					if crc[0]:
+						if self._crc & 0xFFFF != crc[1] & 0xFFFF:
+							return 0, 0, 0
+						return 1, val1[1], val2[1]
+			trys -= 1
+			if trys == 0:
+				break
+		return 0, 0, 0
 
 
 	def _read_n(self, cmd, args):
