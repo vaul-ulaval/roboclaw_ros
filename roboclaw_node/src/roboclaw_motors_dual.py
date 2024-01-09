@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from math import pi, cos, sin
 
-from roboclaw_driver.roboclaw_driver import RoboclawDriver
+from driver.roboclaw_driver import RoboclawDriver
 import rospy
 import tf
 from geometry_msgs.msg import Quaternion, Twist

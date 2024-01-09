@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from math import pi, cos, sin
 
-from roboclaw_driver.roboclaw_driver import RoboclawDriver
+from driver.roboclaw_driver import RoboclawDriver
 import rospy
 import tf
 from geometry_msgs.msg import Quaternion, Twist
@@ -200,7 +200,7 @@ class Node:
         return version
 
     def reset_device(self):
-        self.driver.SpeedM1M2(0, 0)
+        self.driver.StopMotors()
         self.driver.ResetEncoders()
 
     def parameters_setup(self):
@@ -241,7 +241,7 @@ class Node:
         )
 
     def pid_and_motor_currents_setup(self):
-        # NOT USED, NEED TO TEST AS IT DOES NOT WORK
+        # TODO: NOT USED, NEED TO TEST AS IT DID NOT WORK
         # PID settings
         self.driver.SetM1VelocityPID(self.P, self.I, self.D, 150000)
         self.driver.SetM2VelocityPID(self.P, self.I, self.D, 150000)
@@ -281,6 +281,8 @@ class Node:
             speed_left, speed_right = None, None
             status_left, status_right = None, None
             try:
+                # TODO: Test if GetMotorAverageSpeeds() returns the same thing
+                # TODO #2: Validate if we shouldn't use GetISpeedCounters() instead
                 status_left, speed_left, _ = self.driver.ReadSpeedM1()
                 status_right, speed_right, _ = self.driver.ReadSpeedM2()
             except OSError as e:

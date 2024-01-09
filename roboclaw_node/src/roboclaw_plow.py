@@ -1,11 +1,7 @@
 #!/usr/bin/env python
-from math import pi, cos, sin
-
-import diagnostic_msgs
-import diagnostic_updater
-from roboclaw_driver.roboclaw_driver import RoboclawDriver
 import rospy
 from geometry_msgs.msg import Twist
+from driver.roboclaw_driver import RoboclawDriver
 
 
 class Movement:
