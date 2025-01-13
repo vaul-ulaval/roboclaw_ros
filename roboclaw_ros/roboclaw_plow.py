@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from diagnostic_msgs.msg import DiagnosticStatus
-import roboclaw_driver as Roboclaw
+import roboclaw_ros.roboclaw_driver.roboclaw_driver as Roboclaw
 from std_msgs.msg import String
 
 class Movement:
@@ -59,7 +59,7 @@ class RoboclawNode(Node):
                        0x4000: (DiagnosticStatus.OK, "M1 home"),
                        0x8000: (DiagnosticStatus.OK, "M2 home")}
 
-        self.declare_parameter("dev", "/dev/rcPlow")
+        self.declare_parameter("dev", "/dev/ttyACM0")
         self.declare_parameter("baud", 115200)
         self.declare_parameter("address", 130)
         self.declare_parameter("max_duty", 30)

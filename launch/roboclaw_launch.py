@@ -84,7 +84,7 @@ def generate_launch_description():
             respawn=True,
             condition=IfCondition(LaunchConfiguration('run_diag')),
             parameters=[{
-                'dev': '/dev/rcPlow',
+                'dev': '/dev/ttyACM0',
                 'baud': LaunchConfiguration('baud'),
                 'address': 130,
                 'max_duty': 127,
